@@ -4,7 +4,6 @@ Real-time environmental monitoring system built with ESP32 + multiple sensors.  
 # Files Included
 
 - EDM.ino (esp32 code file)
-- App.jsx (React app for connection with the device, does not connect well yet, feature to be implemented, still rough around the edges because used AI for some UI stuff)
 
 # Documentation
 
