@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 
-/* ===================== CONSTANTS ===================== */
+/* Global */
 
 const MAP_SOURCE = {
   uri: 'https://task-stalker.vercel.app/asset/New_WM.jpg',
@@ -23,9 +23,8 @@ const TABS = {
   DOCS: 'docs',
 };
 
-/* ===================== DIVERGENCE ENGINE ===================== */
+/* DIVERGENCE ENGINE (To be implemented soon, no clue how lol */
 
-// Normalization functions based on the divergence model
 const normalizeTemperature = (T) => {
   if (T >= 22.2 && T <= 25.6) return 1.0;
   if (T >= 20.0 && T < 22.2) return 1.0 - ((22.2 - T) / 2.2) * 0.3;
@@ -76,7 +75,6 @@ const normalizeSound = (S) => {
   return 0.0;
 };
 
-// Calculate divergence value
 const calculateDivergence = (temp, humidity, iaq, lux, sound) => {
   const fT = normalizeTemperature(parseFloat(temp) || 0);
   const fH = normalizeHumidity(parseFloat(humidity) || 0);
@@ -87,17 +85,17 @@ const calculateDivergence = (temp, humidity, iaq, lux, sound) => {
   return (0.30 * fT) + (0.20 * fH) + (0.25 * fG) + (0.10 * fL) + (0.15 * fS);
 };
 
-// World line mapping based on divergence value
+// This calculation/data is not accurate
+
 const getWorldLine = (d) => {
   if (d === null || isNaN(d)) return 'UNDEFINED';
   if (d < 0.2) return 'ALPHA';
   if (d < 0.6) return 'BETA';
   if (d < 0.8) return 'GAMMA';
   if (d >= 0.9) return 'STEINS';
-  return 'TRANSITION'; // 0.800 – 0.899
+  return 'TRANSITION'; 
 };
 
-// Get divergence category
 const getDivergenceCategory = (d) => {
   if (d >= 0.90) return { label: 'PERFECT', color: '#00ff88', emoji: '🟢' };
   if (d >= 0.80) return { label: 'EXCELLENT', color: '#88ff88', emoji: '🟢' };
@@ -106,7 +104,6 @@ const getDivergenceCategory = (d) => {
   return { label: 'SEVERE', color: '#ff4444', emoji: '🔴' };
 };
 
-// Get world line color
 const getWorldLineColor = (worldLine) => {
   switch (worldLine) {
     case 'ALPHA': return '#ff8888';
@@ -118,7 +115,7 @@ const getWorldLineColor = (worldLine) => {
   }
 };
 
-/* ===================== MAIN APP ===================== */
+/* MAIN  */
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(TABS.LIVE);
@@ -127,13 +124,13 @@ export default function App() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Header */}
+      {}
       <View style={styles.header}>
         <Text style={styles.headerText}>Environmental Divergence Meter</Text>
         <Text style={styles.subHeader}>DIVERGENCE MODEL v 1.0</Text>
       </View>
 
-      {/* Tab Content */}
+      {}
       <ScrollView style={styles.content}>
         <TerminalPanel>
           {activeTab === TABS.LIVE && <LiveDataMode />}
@@ -142,7 +139,7 @@ export default function App() {
         </TerminalPanel>
       </ScrollView>
 
-      {/* Tab Bar */}
+      {}
       <View style={styles.tabBar}>
         <TabButton
           label="LIVE DATA"
@@ -164,7 +161,7 @@ export default function App() {
   );
 }
 
-/* ===================== LIVE DATA MODE ===================== */
+/* LIVE DATA (To be implemented) */
 
 function LiveDataMode() {
   const [liveData, setLiveData] = useState({
@@ -178,7 +175,6 @@ function LiveDataMode() {
   const [connected, setConnected] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // World‑line mapping based on divergence value
   const getWorldLineForLive = (d) => {
     if (d === null) return 'WAITING...';
     if (d < 0.2) return 'ALPHA';
@@ -188,12 +184,12 @@ function LiveDataMode() {
     return 'TRANSITION';
   };
 
-  // Simulate ESP32 connection and data fetch
+  // ESP32 connection and data fetch (Soon!)
   const fetchLiveData = async () => {
     setRefreshing(true);
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    // Mock data - replace with actual ESP32 endpoint
+    // Mock data for now - replaced later with actual ESP32 endpoint
     const mockData = {
       temperature: 30,
       humidity: 75,
@@ -219,7 +215,7 @@ function LiveDataMode() {
       <Line text="LIVE DATA MODE - ESP32 STREAM" />
       <Spacer />
 
-      {/* Connection Status */}
+      {}
       <Row
         icon={<ChipIcon />}
         label="STATUS"
@@ -228,7 +224,7 @@ function LiveDataMode() {
       />
       <Spacer />
 
-      {/* Sensor Readings */}
+      {}
       <Line text="SENSOR READINGS" />
       <Spacer />
 
@@ -286,7 +282,7 @@ function LiveDataMode() {
         }
       />
 
-      {/* WORLD LINE */}
+      {}
       <Row
         icon={<Text style={{ fontSize: 16, color: '#fff' }}>🌐</Text>}
         label="WORLD LINE"
@@ -319,10 +315,10 @@ function LiveDataMode() {
   );
 }
 
-/* ===================== SIMULATION MODE ===================== */
+/* SIMULATION MODE */
 
 function SimulationMode() {
-  // Manual input state
+  // Manual input
   const [manualData, setManualData] = useState({
     temperature: '23.5',
     humidity: '45',
@@ -331,7 +327,7 @@ function SimulationMode() {
     sound: '35',
   });
 
-  // API data state (for simulation with real data)
+  // API data state
   const [city, setCity] = useState('NEW YORK');
   const [coords, setCoords] = useState({ lat: 40.7128, lon: -74.006 });
   const [apiData, setApiData] = useState({
@@ -364,7 +360,6 @@ function SimulationMode() {
     DEFAULT: 0.5
   };
 
-  // Calculate divergence for current data
   const currentData = inputMode === 'manual' ? manualData : apiData;
   const divergence = calculateDivergence(
     currentData.temperature,
@@ -411,13 +406,11 @@ useEffect(() => {
 
       const currentHour = new Date().getHours();
 
-      // ----- IAQ -----
       const outdoorAQI = aqiData.current?.us_aqi || 50;
       const infiltrationFactor = 1.0 - (buildingQuality * 0.6);
       let baseIAQ = outdoorAQI * infiltrationFactor * 1.5 + 20 + Math.random() * 30;
       const indoorIAQ = Math.min(500, Math.max(0, Math.round(baseIAQ)));
 
-      // ----- TEMPERATURE -----
       const outdoorTemp = weatherData.current_weather.temperature;
       const acProbability = buildingQuality * 0.9 + 0.1;
       const hasAC = Math.random() < acProbability;
@@ -429,7 +422,6 @@ useEffect(() => {
         indoorTemp = Math.max(18, outdoorTemp - (2 + Math.random() * 3));
       }
 
-      // ----- HUMIDITY -----
       const outdoorHumidity = weatherData.hourly.relativehumidity_2m[currentHour];
       let indoorHumidity;
       if (hasAC) {
@@ -439,7 +431,6 @@ useEffect(() => {
       }
       indoorHumidity = Math.max(20, Math.min(80, Math.round(indoorHumidity)));
 
-      // ----- LIGHT -----
       const isDaytime = currentHour >= 6 && currentHour <= 18;
       const weatherCode = weatherData.current_weather.weathercode;
       let indoorLux;
@@ -451,7 +442,6 @@ useEffect(() => {
         indoorLux = 150 + Math.random() * 150;
       }
 
-      // ----- SOUND -----
       const noiseBase = buildingQuality < 0.5 ? 45 : 30;
       const trafficNoise = 5 + Math.random() * 15;
       let indoorSound = noiseBase + trafficNoise * (1 - buildingQuality * 0.3);
@@ -478,7 +468,7 @@ useEffect(() => {
   }
 }, [city, inputMode]);
 
-  // ---------- SEARCH FUNCTION ----------
+  // SEARCH 
   const searchCity = async () => {
     if (!searchQuery) return;
     const res = await fetch(
@@ -528,7 +518,7 @@ useEffect(() => {
 
       <Spacer />
 
-      {/* Manual Input Mode */}
+      {}
       {inputMode === 'manual' && (
         <View>
           <Line text="MANUAL SENSOR INPUT" />
@@ -573,13 +563,13 @@ useEffect(() => {
         </View>
       )}
 
-      {/* API Mode */}
+      {}
       {inputMode === 'api' && (
         <View>
           <Line text="API DATA SOURCE + SIMULATION" />
           <Spacer />
 
-          {/* City Search */}
+          {}
           <Text style={styles.text}>{"> SEARCH LOCATION"}</Text>
           <TextInput
             value={searchQuery}
@@ -616,7 +606,7 @@ useEffect(() => {
           <Line text="SIMULATING INDOOR CONDITIONS FROM OUTDOOR DATA" />
           <Spacer />
 
-          {/* World Map */}
+          {}
           <Line text="WORLD MAP" />
           <WorldMap coords={coords} />
 
@@ -716,7 +706,7 @@ useEffect(() => {
   );
 }
 
-/* ===================== DOCUMENTATION MODE ===================== */
+/* DOCUMENTATION Tab */
 
 function DocumentationMode() {
   return (
@@ -736,7 +726,7 @@ function DocumentationMode() {
       <Text style={styles.text}>   • 2.4" SPI TFT DISPLAY</Text>
       <Spacer />
 
-      {/* Documentation Sections */}
+      {}
       <DocSection
         title="ESP32 MODULE"
         content="The ESP32, developed by Espressif Systems, is a low-cost, low-power System-on-Chip (SoC) with integrated Wi-Fi and Bluetooth capabilities, making it a versatile choice for a wide range of connected applications. It is widely used in IoT, home automation, wearables, and industrial control systems due to its rich feature set and flexibility."
@@ -776,7 +766,7 @@ function DocumentationMode() {
       <Line text="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" />
       <Spacer />
 
-      {/* Divergence Model Documentation */}
+      {}
       <Line text="DIVERGENCE MODEL DOCUMENTATION" />
       <Spacer />
 
@@ -801,7 +791,7 @@ function DocumentationMode() {
   );
 }
 
-/* ===================== WORLD MAP ===================== */
+/* WORLD MAP */
 
 function WorldMap({ coords }) {
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -837,7 +827,7 @@ function WorldMap({ coords }) {
   );
 }
 
-/* ===================== REUSABLE COMPONENTS ===================== */
+/* REUSABLES */
 
 function TerminalPanel({ children }) {
   return <View style={styles.panel}>{children}</View>;
@@ -909,7 +899,7 @@ function DocSection({ title, content }) {
   );
 }
 
-/* ===================== ICONS ===================== */
+/* ICONS */
 
 const BaseIcon = ({ children }) => (
   <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
@@ -979,7 +969,7 @@ const ChipIcon = () => (
   </BaseIcon>
 );
 
-/* ===================== STYLES ===================== */
+/* STYLES */
 
 const styles = StyleSheet.create({
   container: {
