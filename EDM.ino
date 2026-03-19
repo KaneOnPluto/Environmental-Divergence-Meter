@@ -42,7 +42,7 @@ String getWorldLine(float d) {
   if (d < 0.30) return "ALPHA";
   if (d < 0.60) return "BETA";
   if (d < 0.90) return "GAMMA";
-  return "STEINS";
+  return "STEINS"; // Steins:Gate is goated
 }
 
 uint16_t getWorldColor(String w) {
@@ -97,7 +97,7 @@ int readSoundLevel() {
   return constrain(level, 0, 100);
 }
 
-void drawLayout() {
+void drawLayout() { // Can change if you want to 
 
   tft.fillScreen(BG);
 
@@ -106,7 +106,7 @@ void drawLayout() {
   tft.setTextColor(BG);
   tft.setTextSize(2);
   tft.setCursor(25, 6);
-  tft.print("ENVIRONMENTAL DIVERGENCE");
+  tft.print("ENVIRONMENTAL DIVERGENCE"); 
 
   tft.setTextColor(ACCENT);
   tft.setTextSize(1);
@@ -176,7 +176,7 @@ void updateValues() {
   tft.print(String(divergence, 6));
 }
 
-void drawGauge() {
+void drawGauge() { // Segmented gauge
 
   int barX = 20;
   int barY = 215;
@@ -267,7 +267,7 @@ void loop() {
   S = constrain(S, 0, 1);
   L = constrain(L, 0, 1);
 
-  float raw = 0.30 * T + 0.25 * G + 0.20 * H + 0.15 * S + 0.10 * L;
+  float raw = 0.30 * T + 0.25 * G + 0.20 * H + 0.15 * S + 0.10 * L; // Rough formula
 
   smoothedDivergence = alpha * raw + (1 - alpha) * smoothedDivergence;
 
