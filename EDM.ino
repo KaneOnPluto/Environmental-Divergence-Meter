@@ -1,10 +1,14 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
 #include <Wire.h>
-#include <Adafruit_BME680.h>
+#include <bsec.h>
 #include <BH1750.h>
 #include <SPI.h>
 #include <driver/i2s.h>
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Preferences.h>
+#include <HTTPClient.h>
 
 #define TFT_CS 33
 #define TFT_DC 25
@@ -21,15 +25,29 @@
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 
-Adafruit_BME680 bme;
+Bsec iaqSensor;
 BH1750 lightMeter;
+
+unsigned long startTime = 0;
+
+const unsigned long BURN_IN_TIME = 24UL * 60UL * 60UL * 1000UL;
+bool isBurnInComplete = false;
 
 float temp = 0;
 float humidity = 0;
 float divergence = 0;
 float smoothedDivergence = 0;
 
-int iaq = 0;
+const char* ssid = "Kushal's A34";
+const char* password = "Shreya831";
+
+const char* supabaseUrl = "supabase_url";
+const char* supabaseKey = "supabase_key";
+
+unsigned long lastSupabaseSend = 0;
+const unsigned long sendInterval = 60000;
+
+float iaq = 0;
 int sound = 0;
 int lux = 0;
 
@@ -38,11 +56,23 @@ float alpha = 0.2;
 int scanX = 20;
 int lastSegments = 0;
 
+Preferences preferences;
+
+bool bsecStateLoaded = false;
+
+uint8_t bsecState[BSEC_MAX_STATE_BLOB_SIZE];
+
+unsigned long lastStateSave = 0;
+const unsigned long STATE_SAVE_INTERVAL = 600000;  // 10 min
+
+
+// ================= WORLD =================
+
 String getWorldLine(float d) {
   if (d < 0.30) return "ALPHA";
   if (d < 0.60) return "BETA";
   if (d < 0.90) return "GAMMA";
-  return "STEINS"; // Steins:Gate is goated
+  return "STEINS"; // Steins Gate IS GOAT
 }
 
 uint16_t getWorldColor(String w) {
@@ -51,6 +81,9 @@ uint16_t getWorldColor(String w) {
   if (w == "GAMMA") return ILI9341_YELLOW;
   return ILI9341_GREEN;
 }
+
+
+// ================= MIC =================
 
 void setupMic() {
 
@@ -77,6 +110,46 @@ void setupMic() {
   i2s_set_pin(I2S_NUM_0, &pins);
 }
 
+void loadBsecState() {
+
+  preferences.begin("bsec", true);  // read-only
+
+  size_t len = preferences.getBytesLength("state");
+
+  if (len == BSEC_MAX_STATE_BLOB_SIZE) {
+
+    preferences.getBytes("state", bsecState, len);
+    iaqSensor.setState(bsecState);
+
+    bsecStateLoaded = true;
+    Serial.println("BSEC state loaded");
+  } else {
+    Serial.println("No valid BSEC state found");
+  }
+
+  preferences.end();
+}
+
+void saveBsecState() {
+
+  if (iaqSensor.iaqAccuracy < 2) return;
+
+  preferences.begin("bsec", false);
+
+  iaqSensor.getState(bsecState);
+
+  preferences.putBytes("state", bsecState, BSEC_MAX_STATE_BLOB_SIZE);
+
+  preferences.end();
+
+  Serial.println("BSEC state saved");
+}
+
+
+// ================= SERVER =================
+
+WebServer server(80);
+
 int readSoundLevel() {
 
   int32_t sample = 0;
@@ -97,7 +170,10 @@ int readSoundLevel() {
   return constrain(level, 0, 100);
 }
 
-void drawLayout() { // Can change if you want to 
+
+// ================= UI =================
+
+void drawLayout() {
 
   tft.fillScreen(BG);
 
@@ -106,7 +182,7 @@ void drawLayout() { // Can change if you want to
   tft.setTextColor(BG);
   tft.setTextSize(2);
   tft.setCursor(25, 6);
-  tft.print("ENVIRONMENTAL DIVERGENCE"); 
+  tft.print("ENVIRONMENTAL DIVERGENCE");
 
   tft.setTextColor(ACCENT);
   tft.setTextSize(1);
@@ -139,6 +215,55 @@ void drawLayout() { // Can change if you want to
   tft.print("DIVERGENCE");
 }
 
+
+// ================= NETWORK =================
+
+void sendToSupabase() {
+
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+
+  http.begin(supabaseUrl);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("apikey", supabaseKey);
+  http.addHeader("Authorization", String("Bearer ") + supabaseKey);
+  http.addHeader("Prefer", "return=minimal");
+
+  String payload = "{";
+  payload += "\"temperature\":" + String(temp, 1) + ",";
+  payload += "\"humidity\":" + String(humidity, 0) + ",";
+  payload += "\"gas\":" + String(iaq) + ",";
+  payload += "\"light\":" + String(lux) + ",";
+  payload += "\"sound\":" + String(sound) + ",";
+  payload += "\"divergence\":" + String(divergence, 6);
+  payload += "}";
+
+  int httpResponseCode = http.POST(payload);
+
+  Serial.print("Supabase Response: ");
+  Serial.println(httpResponseCode);
+
+  http.end();
+}
+
+void handleData() {
+  String json = "{";
+  json += "\"temperature\":" + String(temp, 1) + ",";
+  json += "\"humidity\":" + String(humidity, 0) + ",";
+  json += "\"iaq\":" + String(iaq) + ",";
+  json += "\"lux\":" + String(lux) + ",";
+  json += "\"sound\":" + String(sound) + ",";
+  json += "\"divergence\":" + String(divergence, 6);
+  json += "}";
+
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, "application/json", json);
+}
+
+
+// ================= DISPLAY UPDATE =================
+
 void updateValues() {
 
   tft.setTextColor(TEXT, BG);
@@ -154,7 +279,15 @@ void updateValues() {
   tft.print(String(lux) + " lx");
 
   tft.setCursor(15, 110);
-  tft.print(String(iaq) + "  ");
+
+  // IAQ STATE
+  if (iaqSensor.iaqAccuracy == 0) {
+    tft.print(String((int)iaq) + "* ");  // show value
+  } else if (iaqSensor.iaqAccuracy == 1) {
+    tft.print("CAL  ");
+  } else {
+    tft.print(String((int)iaq) + "  ");
+  }
 
   tft.setCursor(120, 110);
   tft.print(String(sound) + "  ");
@@ -174,10 +307,24 @@ void updateValues() {
   tft.setTextColor(TEXT, BG);
   tft.setCursor(20, 183);
   tft.print(String(divergence, 6));
+
+  // ===== BSEC STATE INDICATOR =====
+  tft.setTextSize(1);
+  tft.setCursor(10, 230);
+
+  if (bsecStateLoaded) {
+    tft.setTextColor(ILI9341_GREEN, BG);
+    tft.print("STATE: LOADED ");
+  } else {
+    tft.setTextColor(ILI9341_RED, BG);
+    tft.print("STATE: NEW    ");
+  }
 }
 
-void drawGauge() { // Segmented gauge
 
+// ================= VISUAL =================
+
+void drawGauge() {
   int barX = 20;
   int barY = 215;
   int segW = 12;
@@ -194,7 +341,6 @@ void drawGauge() { // Segmented gauge
   else color = ILI9341_GREEN;
 
   for (int i = 0; i < segments; i++) {
-
     int x = barX + i * (segW + gap);
 
     if (i < active)
@@ -204,78 +350,116 @@ void drawGauge() { // Segmented gauge
 
     tft.drawRect(x, barY, segW, 12, HEADER);
   }
-
-  int m1 = barX + (segments * 0.30) * (segW + gap);
-  int m2 = barX + (segments * 0.60) * (segW + gap);
-  int m3 = barX + (segments * 0.90) * (segW + gap);
-
-  tft.drawFastVLine(m1, barY - 4, 20, ACCENT);
-  tft.drawFastVLine(m2, barY - 4, 20, ACCENT);
-  tft.drawFastVLine(m3, barY - 4, 20, ACCENT);
 }
 
 void drawScanner() {
-
   int y = 235;
 
   tft.drawFastHLine(scanX, y, 10, BG);
 
   scanX += 6;
-
   if (scanX > 300) scanX = 20;
 
   tft.drawFastHLine(scanX, y, 10, ACCENT);
 }
 
+
+// ================= SETUP =================
+
 void setup() {
 
   Serial.begin(115200);
 
+  startTime = millis();
+
   Wire.begin(21, 22);
 
-  bme.begin(0x76);
+  iaqSensor.begin(BME68X_I2C_ADDR_LOW, Wire);
+
+  if (iaqSensor.bsecStatus != BSEC_OK) {
+    Serial.println("BSEC init failed");
+  }
+
+  bsec_virtual_sensor_t sensorList[] = {
+    BSEC_OUTPUT_IAQ,
+    BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE,
+    BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY
+  };
+
+  iaqSensor.updateSubscription(sensorList, 3, BSEC_SAMPLE_RATE_ULP);
+
+  loadBsecState();
+
   lightMeter.begin();
 
   tft.begin();
   tft.setRotation(1);
 
-  setupMic();
+  WiFi.begin(ssid, password);
 
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\nWiFi connected");
+  Serial.print("IP: ");
+  Serial.println(WiFi.localIP());
+
+  server.on("/data", handleData);
+  server.begin();
+
+  setupMic();
   drawLayout();
 }
 
+
+// ================= LOOP =================
+
 void loop() {
 
-  if (!bme.performReading()) return;
+  server.handleClient();
 
-  temp = bme.temperature;
-  humidity = bme.humidity;
-  iaq = bme.gas_resistance / 100;
+  if (!iaqSensor.run()) {
+    Serial.println(iaqSensor.bsecStatus);
+  } else {
+    temp = iaqSensor.temperature;
+    humidity = iaqSensor.humidity;
+    iaq = iaqSensor.iaq;
+  }
 
-  lux = lightMeter.readLightLevel();
+  bool timeBurnIn = (millis() - startTime > BURN_IN_TIME);
+  bool sensorReady = (iaqSensor.iaqAccuracy >= 2);
+
+  isBurnInComplete = timeBurnIn || sensorReady;
+
+  lux = max(0, (int)lightMeter.readLightLevel());
   sound = readSoundLevel();
 
-  float T = temp / 40.0;
-  float H = humidity / 100.0;
-  float G = iaq / 500.0;
-  float S = 1.0 - (sound / 100.0);
-  float L = lux / 1000.0;
+  float T = constrain((temp - 20.0) / 15.0, 0, 1);
+  float H = constrain(1.0 - abs(humidity - 50.0) / 50.0, 0, 1);
+  float G = constrain(1.0 - (iaq / 300.0), 0, 1);
+  float S = constrain(1.0 - (sound / 100.0), 0, 1);
+  float L = constrain(1.0 - abs(lux - 300.0) / 700.0, 0, 1);
 
-  T = constrain(T, 0, 1);
-  H = constrain(H, 0, 1);
-  G = constrain(G, 0, 1);
-  S = constrain(S, 0, 1);
-  L = constrain(L, 0, 1);
-
-  float raw = 0.30 * T + 0.25 * G + 0.20 * H + 0.15 * S + 0.10 * L; // Rough formula
+  float raw = 0.30 * T + 0.25 * G + 0.20 * H + 0.15 * S + 0.10 * L;
 
   smoothedDivergence = alpha * raw + (1 - alpha) * smoothedDivergence;
-
   divergence = smoothedDivergence;
 
   updateValues();
   drawGauge();
   drawScanner();
 
-  delay(500);
+  if (millis() > 300000 && millis() - lastStateSave > STATE_SAVE_INTERVAL) {
+    saveBsecState();
+    lastStateSave = millis();
+  }
+
+  if (millis() - lastSupabaseSend > sendInterval) {
+    sendToSupabase();
+    lastSupabaseSend = millis();
+  }
+
+  delay(1000);
 }
