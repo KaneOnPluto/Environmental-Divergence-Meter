@@ -333,7 +333,7 @@ The firmware sound level is approximately:
 ```math
 S_{\text{raw}}
 =
-\operatorname{clamp}
+\mathrm{clamp}
 \left(
 \frac{RMS}{50},
 0,
@@ -344,7 +344,7 @@ S_{\text{raw}}
 where:
 
 ```math
-\operatorname{clamp}(x,a,b)
+\mathrm{clamp}(x,a,b)
 =
 \min(\max(x,a),b)
 ```
@@ -439,12 +439,15 @@ T_n=C\left(\frac{T-20}{15}\right)
 Piecewise:
 
 ```math
-T_n=
-\begin{cases}
-0, & T\le20\\
-\dfrac{T-20}{15}, & 20<T<35\\
-1, & T\ge35
-\end{cases}
+T_n=0,\quad T\le20
+```
+
+```math
+T_n=\dfrac{T-20}{15},\quad 20<T<35
+```
+
+```math
+T_n=1,\quad T\ge35
 ```
 
 This function increases with temperature.
@@ -534,12 +537,15 @@ C\left(
 Piecewise:
 
 ```math
-G_n=
-\begin{cases}
-1, & G\le0\\
-1-\dfrac{G}{300}, & 0<G<300\\
-0, & G\ge300
-\end{cases}
+G_n=1,\quad G\le0
+```
+
+```math
+G_n=1-\dfrac{G}{300},\quad 0<G<300
+```
+
+```math
+G_n=0,\quad G\ge300
 ```
 
 Therefore higher IAQ values reduce the normalized contribution.
@@ -586,12 +592,15 @@ C\left(
 Piecewise:
 
 ```math
-S_n=
-\begin{cases}
-1, & S\le0\\
-1-\dfrac{S}{100}, & 0<S<100\\
-0, & S\ge100
-\end{cases}
+S_n=1,\quad S\le0
+```
+
+```math
+S_n=1-\dfrac{S}{100},\quad 0<S<100
+```
+
+```math
+S_n=0,\quad S\ge100
 ```
 
 The raw score sensitivity in the linear range is:
@@ -1005,13 +1014,19 @@ return "STEINS";
 Mathematically:
 
 ```math
-W(D)=
-\begin{cases}
-\text{ALPHA}, & 0\le D<0.30\\
-\text{BETA}, & 0.30\le D<0.60\\
-\text{GAMMA}, & 0.60\le D<0.90\\
-\text{STEINS}, & 0.90\le D\le1
-\end{cases}
+W(D)=\text{ALPHA},\quad 0\le D<0.30
+```
+
+```math
+W(D)=\text{BETA},\quad 0.30\le D<0.60
+```
+
+```math
+W(D)=\text{GAMMA},\quad 0.60\le D<0.90
+```
+
+```math
+W(D)=\text{STEINS},\quad 0.90\le D\le1
 ```
 
 The thresholds are applied **after** the EMA.
@@ -1463,13 +1478,19 @@ D_t=
 World line:
 
 ```math
-W(D)=
-\begin{cases}
-\text{ALPHA}, & 0\le D<0.30\\
-\text{BETA}, & 0.30\le D<0.60\\
-\text{GAMMA}, & 0.60\le D<0.90\\
-\text{STEINS}, & 0.90\le D\le1
-\end{cases}
+W(D)=\text{ALPHA},\quad 0\le D<0.30
+```
+
+```math
+W(D)=\text{BETA},\quad 0.30\le D<0.60
+```
+
+```math
+W(D)=\text{GAMMA},\quad 0.60\le D<0.90
+```
+
+```math
+W(D)=\text{STEINS},\quad 0.90\le D\le1
 ```
 
 Global bound:
