@@ -38,8 +38,8 @@ float humidity = 0;
 float divergence = 0;
 float smoothedDivergence = 0;
 
-const char* ssid = "Kushal's A34";
-const char* password = "Shreya831";
+const char* ssid = "WIFI_ID";
+const char* password = "WIFI_PASSWORD";
 
 const char* supabaseUrl = "supabase_url";
 const char* supabaseKey = "supabase_key";
