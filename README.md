@@ -4,6 +4,52 @@ Environmental Divergence Meter is an ESP32-based environmental monitoring system
 
 The current firmware also supports persistent BSEC state, periodic Supabase transmission, and world-line classification based on the final divergence value.
 
+## Table of Contents
+
+- [1. System Overview](#1-system-overview)
+- [2. Hardware](#2-hardware)
+  - [2.1 ESP32](#21-esp32)
+  - [2.2 BME688](#22-bme688)
+  - [2.3 BH1750](#23-bh1750)
+  - [2.4 INMP441](#24-inmp441)
+  - [2.5 ILI9341 TFT](#25-ili9341-tft)
+- [3. Pin Configuration](#3-pin-configuration)
+- [4. Sensor Acquisition](#4-sensor-acquisition)
+  - [4.1 BME688 / BSEC](#41-bme688--bsec)
+  - [4.2 BH1750](#42-bh1750)
+  - [4.3 INMP441 Sound Processing](#43-inmp441-sound-processing)
+- [5. Divergence Model](#5-divergence-model)
+- [6. Normalization Functions](#6-normalization-functions)
+  - [6.1 Temperature](#61-temperature)
+  - [6.2 Humidity](#62-humidity)
+  - [6.3 IAQ](#63-iaq)
+  - [6.4 Sound](#64-sound)
+  - [6.5 Illuminance](#65-illuminance)
+- [7. Weighted Raw Score](#7-weighted-raw-score)
+- [8. Temporal Smoothing](#8-temporal-smoothing)
+- [9. Complete Mathematical Formula](#9-complete-mathematical-formula)
+- [10. Example Calculation](#10-example-calculation)
+- [11. Effect of Smoothing](#11-effect-of-smoothing)
+- [12. EMA Response](#12-ema-response)
+- [13. World-Line Classification](#13-world-line-classification)
+- [14. Divergence Bounds](#14-divergence-bounds)
+- [15. Model Interpretation](#15-model-interpretation)
+- [16. Important Properties of the Current Temperature Model](#16-important-properties-of-the-current-temperature-model)
+- [17. BSEC State Persistence](#17-bsec-state-persistence)
+- [18. Burn-In / Sensor Readiness](#18-burn-in--sensor-readiness)
+- [19. Display](#19-display)
+- [20. HTTP API](#20-http-api)
+- [21. Supabase Transmission](#21-supabase-transmission)
+- [22. Network Configuration](#22-network-configuration)
+- [23. Full Processing Algorithm](#23-full-processing-algorithm)
+- [24. Mathematical Specification](#24-mathematical-specification)
+- [25. Implementation Reference](#25-implementation-reference)
+- [26. Model Versioning](#26-model-versioning)
+- [27. Current Parameter Set](#27-current-parameter-set)
+- [28. Limitations of the Current Model](#28-limitations-of-the-current-model)
+- [29. Repository Reference](#29-repository-reference)
+- [30. Summary](#30-summary)
+
 ---
 
 ## 1. System Overview
@@ -47,15 +93,15 @@ Sensors
        +-----+-----+
        |           |
        v           v
- World Line     Network
+   World-line    Network
  classification   output
 ```
 
 ---
 
-# 2. Hardware
+## 2. Hardware
 
-## 2.1 ESP32
+### 2.1 ESP32
 
 The ESP32 is the main processing and networking device.
 
@@ -72,7 +118,7 @@ It is responsible for:
 
 ---
 
-## 2.2 BME688
+### 2.2 BME688
 
 The BME688 is used through the **BSEC** library.
 
@@ -94,7 +140,7 @@ The IAQ variable in the model is the BSEC IAQ output, not a raw gas-resistance m
 
 ---
 
-## 2.3 BH1750
+### 2.3 BH1750
 
 The BH1750 provides illuminance in lux.
 
@@ -108,7 +154,7 @@ The value is incorporated into the divergence model through the light normalizat
 
 ---
 
-## 2.4 INMP441
+### 2.4 INMP441
 
 The INMP441 is connected using I2S.
 
@@ -127,7 +173,7 @@ The firmware does not perform a calibrated SPL conversion to physical decibels. 
 
 ---
 
-## 2.5 ILI9341 TFT
+### 2.5 ILI9341 TFT
 
 The display is an ILI9341-based TFT.
 
@@ -148,7 +194,7 @@ The display is not part of the mathematical model; it is an output device.
 
 ---
 
-# 3. Pin Configuration
+## 3. Pin Configuration
 
 The current firmware defines:
 
@@ -191,9 +237,9 @@ iaqSensor.begin(BME68X_I2C_ADDR_LOW, Wire);
 
 ---
 
-# 4. Sensor Acquisition
+## 4. Sensor Acquisition
 
-## 4.1 BME688 / BSEC
+### 4.1 BME688 / BSEC
 
 During the main loop, the firmware executes:
 
@@ -209,23 +255,23 @@ if (!iaqSensor.run()) {
 
 Thus:
 
-$$
+```math
 T = \text{temperature}
-$$
+```
 
-$$
+```math
 H = \text{relative humidity}
-$$
+```
 
-$$
+```math
 G = \text{BSEC IAQ}
-$$
+```
 
 These values are then passed to the divergence engine.
 
 ---
 
-## 4.2 BH1750
+### 4.2 BH1750
 
 The light level is read using:
 
@@ -235,13 +281,13 @@ lux = max(0, (int)lightMeter.readLightLevel());
 
 Therefore the model receives:
 
-$$
+```math
 L = \max(0,\text{BH1750 lux})
-$$
+```
 
 ---
 
-## 4.3 INMP441 Sound Processing
+### 4.3 INMP441 Sound Processing
 
 The sound routine collects 200 samples.
 
@@ -262,29 +308,29 @@ return constrain(level, 0, 100);
 
 Let the shifted samples be:
 
-$$
+```math
 x_1,x_2,\ldots,x_N
-$$
+```
 
 where:
 
-$$
+```math
 N=200
-$$
+```
 
 The RMS quantity used by the firmware is:
 
-$$
+```math
 RMS =
 \sqrt{
 \frac{1}{N}
 \sum_{i=1}^{N}x_i^2
 }
-$$
+```
 
 The firmware sound level is approximately:
 
-$$
+```math
 S_{\text{raw}}
 =
 \operatorname{clamp}
@@ -293,33 +339,31 @@ S_{\text{raw}}
 0,
 100
 \right)
-$$
+```
 
 where:
 
-$$
+```math
 \operatorname{clamp}(x,a,b)
 =
 \min(\max(x,a),b)
-$$
+```
 
 The resulting `sound` value is then used by the divergence model.
 
-### Important
+> [!IMPORTANT]
+> The current firmware does **not** establish that this value is calibrated to dB SPL.
+> It should therefore be treated as a firmware-specific sound index, not as a laboratory-calibrated acoustic measurement.
 
-The current firmware does **not** establish that this value is calibrated to dB SPL.
+The sound index lies in the interval:
 
-It should therefore be treated as a firmware-specific sound index in the interval:
-
-$$
+```math
 0\le S_{\text{raw}}\le100
-$$
-
-rather than as a laboratory-calibrated acoustic measurement.
+```
 
 ---
 
-# 5. Divergence Model
+## 5. Divergence Model
 
 The divergence engine has two mathematical stages:
 
@@ -328,7 +372,7 @@ The divergence engine has two mathematical stages:
 
 The raw divergence score is:
 
-$$
+```math
 R_t
 =
 0.30T_n
@@ -340,33 +384,33 @@ R_t
 0.15S_n
 +
 0.10L_n
-$$
+```
 
 The coefficients sum to one:
 
-$$
+```math
 0.30+0.25+0.20+0.15+0.10=1
-$$
+```
 
 Therefore the raw score is bounded by:
 
-$$
+```math
 0\le R_t\le1
-$$
+```
 
 provided that every normalized input is itself bounded to $[0,1]$.
 
 ---
 
-# 6. Normalization Functions
+## 6. Normalization Functions
 
 The firmware uses `constrain()` for every normalized quantity.
 
 For clarity, define:
 
-$$
+```math
 C(x)=\min(1,\max(0,x))
-$$
+```
 
 This is the mathematical equivalent of:
 
@@ -376,7 +420,7 @@ constrain(x, 0, 1)
 
 ---
 
-## 6.1 Temperature
+### 6.1 Temperature
 
 Firmware:
 
@@ -386,46 +430,46 @@ float T = constrain((temp - 20.0) / 15.0, 0, 1);
 
 Mathematical form:
 
-$$
+```math
 \boxed{
 T_n=C\left(\frac{T-20}{15}\right)
 }
-$$
+```
 
 Piecewise:
 
-$$
+```math
 T_n=
 \begin{cases}
-0, & T\le20\\[4pt]
-\dfrac{T-20}{15}, & 20<T<35\\[8pt]
+0, & T\le20\\
+\dfrac{T-20}{15}, & 20<T<35\\
 1, & T\ge35
 \end{cases}
-$$
+```
 
 This function increases with temperature.
 
 Its slope in the linear region is:
 
-$$
+```math
 \frac{\partial T_n}{\partial T}
 =
 \frac{1}{15}
-$$
+```
 
 Because temperature has a 30% weight, the raw divergence sensitivity in this region is:
 
-$$
+```math
 \frac{\partial R}{\partial T}
 =
 0.30\cdot\frac{1}{15}
 =
 0.02
-$$
+```
 
 ---
 
-## 6.2 Humidity
+### 6.2 Humidity
 
 Firmware:
 
@@ -435,40 +479,40 @@ float H = constrain(1.0 - abs(humidity - 50.0) / 50.0, 0, 1);
 
 Mathematical form:
 
-$$
+```math
 \boxed{
 H_n=
 C\left(
 1-\frac{|H-50|}{50}
 \right)
 }
-$$
+```
 
 This creates a triangular response centered at 50% relative humidity.
 
 At:
 
-$$
+```math
 H=50
-$$
+```
 
 the normalized score is:
 
-$$
+```math
 H_n=1
-$$
+```
 
 At 0% or 100%:
 
-$$
+```math
 H_n=0
-$$
+```
 
 for the normal physical humidity range.
 
 ---
 
-## 6.3 IAQ
+### 6.3 IAQ
 
 Firmware:
 
@@ -478,49 +522,49 @@ float G = constrain(1.0 - (iaq / 300.0), 0, 1);
 
 Mathematical form:
 
-$$
+```math
 \boxed{
 G_n=
 C\left(
 1-\frac{G}{300}
 \right)
 }
-$$
+```
 
 Piecewise:
 
-$$
+```math
 G_n=
 \begin{cases}
-1, & G\le0\\[4pt]
-1-\dfrac{G}{300}, & 0<G<300\\[8pt]
+1, & G\le0\\
+1-\dfrac{G}{300}, & 0<G<300\\
 0, & G\ge300
 \end{cases}
-$$
+```
 
 Therefore higher IAQ values reduce the normalized contribution.
 
 Within the linear range:
 
-$$
+```math
 \frac{\partial G_n}{\partial G}
 =
 -\frac{1}{300}
-$$
+```
 
 and therefore:
 
-$$
+```math
 \frac{\partial R}{\partial G}
 =
 0.25\left(-\frac{1}{300}\right)
 =
 -\frac{1}{1200}
-$$
+```
 
 ---
 
-## 6.4 Sound
+### 6.4 Sound
 
 Firmware:
 
@@ -530,39 +574,39 @@ float S = constrain(1.0 - (sound / 100.0), 0, 1);
 
 Mathematical form:
 
-$$
+```math
 \boxed{
 S_n=
 C\left(
 1-\frac{S}{100}
 \right)
 }
-$$
+```
 
 Piecewise:
 
-$$
+```math
 S_n=
 \begin{cases}
-1, & S\le0\\[4pt]
-1-\dfrac{S}{100}, & 0<S<100\\[8pt]
+1, & S\le0\\
+1-\dfrac{S}{100}, & 0<S<100\\
 0, & S\ge100
 \end{cases}
-$$
+```
 
 The raw score sensitivity in the linear range is:
 
-$$
+```math
 \frac{\partial R}{\partial S}
 =
 0.15\left(-\frac{1}{100}\right)
 =
 -0.0015
-$$
+```
 
 ---
 
-## 6.5 Illuminance
+### 6.5 Illuminance
 
 Firmware:
 
@@ -572,40 +616,40 @@ float L = constrain(1.0 - abs(lux - 300.0) / 700.0, 0, 1);
 
 Mathematical form:
 
-$$
+```math
 \boxed{
 L_n=
 C\left(
 1-\frac{|L-300|}{700}
 \right)
 }
-$$
+```
 
 The maximum occurs at:
 
-$$
+```math
 L=300\text{ lux}
-$$
+```
 
 At this point:
 
-$$
+```math
 L_n=1
-$$
+```
 
 The absolute slope away from the center is:
 
-$$
+```math
 \left|
 \frac{\partial L_n}{\partial L}
 \right|
 =
 \frac{1}{700}
-$$
+```
 
 and the corresponding raw-score sensitivity is:
 
-$$
+```math
 \left|
 \frac{\partial R}{\partial L}
 \right|
@@ -613,13 +657,13 @@ $$
 0.10\cdot\frac{1}{700}
 =
 \frac{1}{7000}
-$$
+```
 
 for each linear branch.
 
 ---
 
-# 7. Weighted Raw Score
+## 7. Weighted Raw Score
 
 After normalization, the firmware calculates:
 
@@ -636,7 +680,7 @@ These variables are already normalized at this point.
 
 Therefore:
 
-$$
+```math
 \boxed{
 R_t=
 0.30T_n+
@@ -645,7 +689,7 @@ R_t=
 0.15S_n+
 0.10L_n
 }
-$$
+```
 
 The maximum possible contribution from each component is:
 
@@ -660,13 +704,13 @@ The maximum possible contribution from each component is:
 
 Thus:
 
-$$
+```math
 0\le R_t\le1
-$$
+```
 
 ---
 
-# 8. Temporal Smoothing
+## 8. Temporal Smoothing
 
 The firmware defines:
 
@@ -686,7 +730,7 @@ divergence = smoothedDivergence;
 
 Therefore:
 
-$$
+```math
 \boxed{
 D_t
 =
@@ -694,7 +738,7 @@ D_t
 +
 0.8D_{t-1}
 }
-$$
+```
 
 where:
 
@@ -708,11 +752,11 @@ It prevents the displayed divergence from responding instantaneously to every se
 
 ---
 
-# 9. Complete Mathematical Formula
+## 9. Complete Mathematical Formula
 
 Substituting the normalization functions into the raw score:
 
-$$
+```math
 \begin{aligned}
 R_t={}&
 0.30C\left(\frac{T-20}{15}\right)
@@ -727,19 +771,19 @@ R_t={}&
 &+
 0.10C\left(1-\frac{|L-300|}{700}\right)
 \end{aligned}
-$$
+```
 
 The final divergence is:
 
-$$
+```math
 \boxed{
 D_t=0.2R_t+0.8D_{t-1}
 }
-$$
+```
 
 Combining both expressions:
 
-$$
+```math
 \begin{aligned}
 D_t={}&0.2
 \Bigg[
@@ -758,13 +802,13 @@ D_t={}&0.2
 +
 0.8D_{t-1}
 \end{aligned}
-$$
+```
 
 This is the mathematical definition of the current firmware implementation.
 
 ---
 
-# 10. Example Calculation
+## 10. Example Calculation
 
 Assume the following sensor measurements:
 
@@ -776,56 +820,56 @@ Assume the following sensor measurements:
 | Sound | 30 |
 | Light | 300 lux |
 
-### Temperature
+#### Temperature
 
-$$
+```math
 T_n=
 \frac{25-20}{15}
 =
 0.3333
-$$
+```
 
-### Humidity
+#### Humidity
 
-$$
+```math
 H_n=
 1-\frac{|50-50|}{50}
 =
 1
-$$
+```
 
-### IAQ
+#### IAQ
 
-$$
+```math
 G_n=
 1-\frac{50}{300}
 =
 0.8333
-$$
+```
 
-### Sound
+#### Sound
 
-$$
+```math
 S_n=
 1-\frac{30}{100}
 =
 0.70
-$$
+```
 
-### Light
+#### Light
 
-$$
+```math
 L_n=
 1-\frac{|300-300|}{700}
 =
 1
-$$
+```
 
 The weighted raw score is therefore:
 
-$$
+```math
 \begin{aligned}
-R
+R_t
 &=
 0.30(0.3333)
 +
@@ -841,49 +885,49 @@ R
 &\approx
 0.7133
 \end{aligned}
-$$
+```
 
 So:
 
-$$
-\boxed{R\approx0.7133}
-$$
+```math
+\boxed{R_t\approx0.7133}
+```
 
 ---
 
-# 11. Effect of Smoothing
+## 11. Effect of Smoothing
 
 Suppose the previous divergence is:
 
-$$
+```math
 D_{t-1}=0
-$$
+```
 
 Then:
 
-$$
+```math
 D_t
 =
 0.2(0.7133)+0.8(0)
-$$
+```
 
 giving:
 
-$$
+```math
 \boxed{
 D_t\approx0.1427
 }
-$$
+```
 
 Therefore the first output after initialization is much smaller than the raw score.
 
-For repeated identical input $R$:
+For repeated identical input $R$ (so $R_t=R$ for every $t$):
 
-$$
+```math
 D_t
 =
 R(1-0.8^t)
-$$
+```
 
 when $D_0=0$.
 
@@ -891,35 +935,35 @@ This means the divergence approaches the raw score exponentially.
 
 ---
 
-# 12. EMA Response
+## 12. EMA Response
 
 For a constant raw score:
 
-$$
+```math
 D_t=R(1-0.8^t)
-$$
+```
 
 The remaining error after $t$ updates is:
 
-$$
+```math
 |R-D_t|
 =
 |R-D_0|0.8^t
-$$
+```
 
 The half-life is found from:
 
-$$
+```math
 0.8^t=0.5
-$$
+```
 
 so:
 
-$$
+```math
 t=
 \frac{\ln(0.5)}{\ln(0.8)}
 \approx3.11
-$$
+```
 
 Thus the filter reaches approximately half of a step change after 3.1 updates.
 
@@ -933,21 +977,21 @@ so the update interval is approximately one second, excluding execution overhead
 
 A 95% response level satisfies:
 
-$$
+```math
 0.8^t=0.05
-$$
+```
 
 which gives:
 
-$$
+```math
 t\approx13.4
-$$
+```
 
 So a large step change takes roughly 13–14 update cycles to settle to within 5% of its final value.
 
 ---
 
-# 13. World-Line Classification
+## 13. World-Line Classification
 
 The firmware maps the final divergence value to a world line:
 
@@ -960,7 +1004,7 @@ return "STEINS";
 
 Mathematically:
 
-$$
+```math
 W(D)=
 \begin{cases}
 \text{ALPHA}, & 0\le D<0.30\\
@@ -968,7 +1012,7 @@ W(D)=
 \text{GAMMA}, & 0.60\le D<0.90\\
 \text{STEINS}, & 0.90\le D\le1
 \end{cases}
-$$
+```
 
 The thresholds are applied **after** the EMA.
 
@@ -976,39 +1020,39 @@ Therefore the world line is based on $D_t$, not directly on $R_t$.
 
 ---
 
-# 14. Divergence Bounds
+## 14. Divergence Bounds
 
 Every normalized quantity is clamped to:
 
-$$
+```math
 [0,1]
-$$
+```
 
 The weighted coefficients are non-negative and sum to one.
 
 Therefore:
 
-$$
+```math
 0\le R_t\le1
-$$
+```
 
 The final divergence is a convex combination:
 
-$$
+```math
 D_t=0.2R_t+0.8D_{t-1}
-$$
+```
 
 If:
 
-$$
+```math
 0\le D_{t-1}\le1
-$$
+```
 
 then:
 
-$$
+```math
 0\le D_t\le1
-$$
+```
 
 The initial value is:
 
@@ -1019,15 +1063,15 @@ float smoothedDivergence = 0;
 
 so:
 
-$$
+```math
 D_0=0
-$$
+```
 
 and the bounded interval is maintained by the recurrence.
 
 ---
 
-# 15. Model Interpretation
+## 15. Model Interpretation
 
 The current implementation should be understood as a **weighted environmental score** whose result is named "divergence" by the project.
 
@@ -1046,43 +1090,43 @@ This distinction matters when comparing the EDM model with external environmenta
 
 ---
 
-# 16. Important Properties of the Current Temperature Model
+## 16. Important Properties of the Current Temperature Model
 
 The current implementation is:
 
-$$
+```math
 T_n=C\left(\frac{T-20}{15}\right)
-$$
+```
 
 This means:
 
-$$
+```math
 T\le20 \Rightarrow T_n=0
-$$
+```
 
 and:
 
-$$
+```math
 T\ge35 \Rightarrow T_n=1
-$$
+```
 
 Therefore, within the current mathematical model, a higher temperature produces a higher temperature contribution.
 
 For example:
 
-$$
+```math
 T=25
 \Rightarrow
 T_n=\frac{5}{15}\approx0.3333
-$$
+```
 
 while:
 
-$$
+```math
 T=35
 \Rightarrow
 T_n=1
-$$
+```
 
 This is a direct property of the implemented firmware and should not be interpreted as a validated definition of thermal comfort.
 
@@ -1090,7 +1134,7 @@ Any future change to make temperature an optimum-centered function would constit
 
 ---
 
-# 17. BSEC State Persistence
+## 17. BSEC State Persistence
 
 The firmware stores the BSEC state using ESP32 `Preferences`.
 
@@ -1118,15 +1162,15 @@ const unsigned long STATE_SAVE_INTERVAL = 600000;
 
 which corresponds to:
 
-$$
+```math
 600000\text{ ms}=10\text{ minutes}
-$$
+```
 
 The BSEC state is therefore persistent across restarts, assuming a valid stored state exists.
 
 ---
 
-# 18. Burn-In / Sensor Readiness
+## 18. Burn-In / Sensor Readiness
 
 The firmware defines:
 
@@ -1137,9 +1181,9 @@ const unsigned long BURN_IN_TIME =
 
 Therefore:
 
-$$
+```math
 24\text{ hours}=86\,400\,000\text{ ms}
-$$
+```
 
 The firmware also checks:
 
@@ -1161,7 +1205,7 @@ The burn-in/readiness state affects the firmware's state tracking, but it does n
 
 ---
 
-# 19. Display
+## 19. Display
 
 The ILI9341 display shows the current environment and divergence state.
 
@@ -1192,11 +1236,11 @@ int active = divergence * segments;
 
 Therefore the approximate number of active segments is:
 
-$$
+```math
 N_{\text{active}}
 =
 \lfloor20D\rfloor
-$$
+```
 
 subject to the integer conversion performed by the firmware.
 
@@ -1204,7 +1248,7 @@ The gauge color follows the world-line thresholds.
 
 ---
 
-# 20. HTTP API
+## 20. HTTP API
 
 The ESP32 runs an HTTP server on port 80:
 
@@ -1247,7 +1291,7 @@ http://ESP32_IP/data
 
 ---
 
-# 21. Supabase Transmission
+## 21. Supabase Transmission
 
 The firmware periodically sends data to the configured Supabase endpoint.
 
@@ -1259,9 +1303,9 @@ const unsigned long sendInterval = 60000;
 
 which is:
 
-$$
+```math
 60\,000\text{ ms}=60\text{ seconds}
-$$
+```
 
 The payload contains:
 
@@ -1301,7 +1345,7 @@ for those two fields.
 
 ---
 
-# 22. Network Configuration
+## 22. Network Configuration
 
 The firmware contains placeholders:
 
@@ -1328,7 +1372,7 @@ Serial.print("IP: ");
 Serial.println(WiFi.localIP());
 ```
 
-The Android application can then use that IP to access:
+The EDM-App can then use that IP to access:
 
 ```text
 http://ESP32_IP/data
@@ -1336,7 +1380,7 @@ http://ESP32_IP/data
 
 ---
 
-# 23. Full Processing Algorithm
+## 23. Full Processing Algorithm
 
 The main loop can be summarized as:
 
@@ -1365,60 +1409,60 @@ The main loop can be summarized as:
 
 ---
 
-# 24. Mathematical Specification
+## 24. Mathematical Specification
 
 For implementation and research purposes, the current model can be compactly defined as follows.
 
 Define the clamp operator:
 
-$$
+```math
 C(x)=\min(1,\max(0,x))
-$$
+```
 
 Sensor normalizations:
 
-$$
+```math
 T_n=C\left(\frac{T-20}{15}\right)
-$$
+```
 
-$$
+```math
 H_n=C\left(1-\frac{|H-50|}{50}\right)
-$$
+```
 
-$$
+```math
 G_n=C\left(1-\frac{G}{300}\right)
-$$
+```
 
-$$
+```math
 S_n=C\left(1-\frac{S}{100}\right)
-$$
+```
 
-$$
+```math
 L_n=C\left(1-\frac{|L-300|}{700}\right)
-$$
+```
 
 Weighted raw score:
 
-$$
+```math
 R_t=
 0.30T_n+
 0.25G_n+
 0.20H_n+
 0.15S_n+
 0.10L_n
-$$
+```
 
 Temporal filter:
 
-$$
+```math
 D_t=
 0.20R_t+
 0.80D_{t-1}
-$$
+```
 
 World line:
 
-$$
+```math
 W(D)=
 \begin{cases}
 \text{ALPHA}, & 0\le D<0.30\\
@@ -1426,17 +1470,17 @@ W(D)=
 \text{GAMMA}, & 0.60\le D<0.90\\
 \text{STEINS}, & 0.90\le D\le1
 \end{cases}
-$$
+```
 
 Global bound:
 
-$$
+```math
 \boxed{0\le D_t\le1}
-$$
+```
 
 ---
 
-# 25. Implementation Reference
+## 25. Implementation Reference
 
 The central divergence implementation is:
 
@@ -1471,7 +1515,7 @@ This section should be treated as the executable reference for the mathematical 
 
 ---
 
-# 26. Model Versioning
+## 26. Model Versioning
 
 The mathematical model should be versioned whenever any of the following changes:
 
@@ -1490,7 +1534,7 @@ For reproducibility, future firmware revisions should document the model version
 
 ---
 
-# 27. Current Parameter Set
+## 27. Current Parameter Set
 
 | Parameter | Current value |
 |---|---:|
@@ -1516,7 +1560,7 @@ For reproducibility, future firmware revisions should document the model version
 
 ---
 
-# 28. Limitations of the Current Model
+## 28. Limitations of the Current Model
 
 The current model is an implementation-defined scoring system.
 
@@ -1537,7 +1581,7 @@ The purpose of the model is to produce a consistent, bounded, responsive scalar 
 
 ---
 
-# 29. Repository Reference
+## 29. Repository Reference
 
 The primary implementation is contained in:
 
@@ -1557,52 +1601,50 @@ The repository documentation should therefore treat the firmware equation as the
 
 ---
 
-# 30. Summary
+## 30. Summary
 
 The EDM divergence engine is a two-stage model.
 
 First, the raw environmental measurements are normalized:
 
-$$
+```math
 (T,H,G,S,L)
 \longrightarrow
 (T_n,H_n,G_n,S_n,L_n)
-$$
+```
 
 Second, the normalized values are combined:
 
-$$
+```math
 R_t=
 0.30T_n+
 0.25G_n+
 0.20H_n+
 0.15S_n+
 0.10L_n
-$$
+```
 
 and temporally filtered:
 
-$$
+```math
 \boxed{
 D_t=
 0.20R_t+
 0.80D_{t-1}
 }
-$$
+```
 
 The result is bounded:
 
-$$
+```math
 \boxed{0\le D_t\le1}
-$$
+```
 
 and classified into one of four project world lines:
 
 ```text
-0.00 ───── 0.30 ───── 0.60 ───── 0.90 ───── 1.00
-             |           |           |
-           ALPHA        BETA        GAMMA       STEINS
+0.00 ────────── 0.30 ────────── 0.60 ────────── 0.90 ────────── 1.00
+  │     ALPHA     │     BETA      │     GAMMA     │    STEINS     │
 ```
 
 The current implementation is intentionally deterministic: the same sensor state and previous divergence state produce the same next divergence value.
-
